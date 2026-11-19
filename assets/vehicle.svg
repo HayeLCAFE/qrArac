@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" role="img" aria-label="Park halindeki araç çizimi">
+  <rect width="800" height="360" fill="#d5ddd4"/>
+  <rect x="0" y="250" width="800" height="110" fill="#c3cdc2"/>
+  <path d="M120 250h90l40-70h280l70 70h80v40H120z" fill="#245c48"/>
+  <rect x="250" y="150" width="210" height="70" rx="8" fill="#d8f1fa"/>
+  <circle cx="230" cy="290" r="38" fill="#17241f"/>
+  <circle cx="230" cy="290" r="16" fill="#9aa89f"/>
+  <circle cx="560" cy="290" r="38" fill="#17241f"/>
+  <circle cx="560" cy="290" r="16" fill="#9aa89f"/>
+</svg>
