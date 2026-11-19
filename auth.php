@@ -81,7 +81,7 @@ function app_send_security_headers(): void
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'nonce-" . app_csp_nonce() . "' https://fonts.googleapis.com; script-src 'self' 'nonce-" . app_csp_nonce() . "'; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; base-uri 'self'; form-action 'self' https://www.shopier.com https://shopier.com; frame-ancestors 'none'; object-src 'none'");
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'nonce-" . app_csp_nonce() . "'; script-src 'self' 'nonce-" . app_csp_nonce() . "'; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self' https://www.shopier.com https://shopier.com; frame-ancestors 'none'; object-src 'none'");
     if (app_request_is_https()) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
@@ -281,7 +281,13 @@ function app_setting_defaults(): array
         'sms_header' => '',
         'force_https' => false,
         'max_cards_per_license' => 3,
-        'public_base_url' => ''
+        'public_base_url' => '',
+        'company_name' => '',
+        'company_address' => '',
+        'company_tax_no' => '',
+        'public_email' => '',
+        'public_phone' => '',
+        'trusted_proxies' => ''
     ];
 }
 
@@ -442,13 +448,17 @@ function app_smtp_send(string $from, string $to, string $subject, string $body, 
     if (!$expect($read(), '354')) {
         return false;
     }
+    $messageId = '<' . bin2hex(random_bytes(12)) . '@' . (parse_url(app_public_base_url(), PHP_URL_HOST) ?: 'localhost') . '>';
     $payload = 'From: ' . $from . "\r\n"
         . 'To: ' . $to . "\r\n"
         . 'Subject: ' . $subject . "\r\n"
+        . 'Date: ' . date('r') . "\r\n"
+        . 'Message-ID: ' . $messageId . "\r\n"
         . "MIME-Version: 1.0\r\n"
         . "Content-Type: text/plain; charset=UTF-8\r\n"
+        . "Content-Transfer-Encoding: 8bit\r\n"
         . "\r\n"
-        . str_replace("\n.", "\n..", str_replace("\r\n", "\n", $body));
+        . str_replace("\n", "\r\n", str_replace("\n.", "\n..", str_replace(["\r\n", "\r"], "\n", $body)));
     $write($payload . "\r\n.");
     if (!$expect($read(), '250')) {
         return false;
@@ -510,9 +520,35 @@ function app_http_get(string $url): ?string
     return is_string($result) ? $result : null;
 }
 
+function request_client_ip(): string
+{
+    $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if ($remote === '') {
+        return 'unknown';
+    }
+
+    $trusted = array_filter(array_map('trim', preg_split('/[\s,]+/', (string) (app_settings()['trusted_proxies'] ?? ''))));
+    $isTrusted = false;
+    if ($trusted !== []) {
+        $isTrusted = in_array($remote, $trusted, true);
+    } else {
+        $isTrusted = filter_var($remote, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+
+    if (!$isTrusted) {
+        return $remote;
+    }
+
+    $forwarded = trim(explode(',', (string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''))[0]);
+    if ($forwarded === '') {
+        $forwarded = trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''))[0]);
+    }
+    return filter_var($forwarded, FILTER_VALIDATE_IP) !== false ? $forwarded : $remote;
+}
+
 function request_ip_hash(): string
 {
-    return hash_hmac('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), activation_encryption_key());
+    return hash_hmac('sha256', request_client_ip(), activation_encryption_key());
 }
 
 function validate_turkish_iban(string $iban): bool
@@ -822,9 +858,37 @@ function shopier_verify_webhook(string $rawBody, string $signatureHeader, string
         || hash_equals($hex, strtolower($signatureHeader));
 }
 
+function shopier_amount_candidates(array $data): array
+{
+    $candidates = [];
+    foreach (['total_price', 'price', 'total', 'amount', 'total_amount', 'grand_total'] as $key) {
+        if (!isset($data[$key]) || !is_numeric($data[$key])) {
+            continue;
+        }
+        $raw = str_replace(',', '.', trim((string) $data[$key]));
+        if (!is_numeric($raw)) {
+            continue;
+        }
+        if (str_contains($raw, '.')) {
+            $candidates[] = (int) round(((float) $raw) * 100);
+        } else {
+            $int = (int) $raw;
+            $candidates[] = $int;
+            $candidates[] = $int * 100;
+        }
+    }
+    return array_values(array_unique($candidates));
+}
+
 function normalize_phone_digits(string $phone): string
 {
     return preg_replace('/\D/', '', $phone);
+}
+
+function phone_is_international(string $phone): bool
+{
+    $trimmed = ltrim(trim($phone), " \t\n\r\0\x0B(");
+    return str_starts_with($trimmed, '+') || str_starts_with($trimmed, '00');
 }
 
 function international_phone(string $phone): string
@@ -832,6 +896,9 @@ function international_phone(string $phone): string
     $digits = normalize_phone_digits($phone);
     if ($digits === '') {
         return '';
+    }
+    if (phone_is_international($phone)) {
+        return '+' . ltrim($digits, '0');
     }
     if (str_starts_with($digits, '90')) {
         return '+' . $digits;
@@ -845,8 +912,12 @@ function whatsapp_link(string $phone, string $message): string
     if (strlen($digits) < 10) {
         return '';
     }
-    if (!str_starts_with($digits, '90')) {
-        $digits = '90' . ltrim($digits, '0');
+    if (phone_is_international($phone)) {
+        $digits = ltrim($digits, '0');
+    } else {
+        if (!str_starts_with($digits, '90')) {
+            $digits = '90' . ltrim($digits, '0');
+        }
     }
     return 'https://wa.me/' . $digits . '?text=' . rawurlencode($message);
 }
@@ -862,5 +933,30 @@ function card_templates(): array
 
 function legal_links_html(): string
 {
-    return '<a href="gizlilik.php">Gizlilik</a> · <a href="kvkk.php">KVKK</a> · <a href="cerez.php">Çerezler</a>';
+    return '<a href="gizlilik.php">Gizlilik</a> · <a href="kvkk.php">KVKK</a> · <a href="cerez.php">Çerezler</a> · <a href="mesafeli-satis.php">Mesafeli satış</a> · <a href="on-bilgilendirme.php">Ön bilgilendirme</a> · <a href="iade.php">İade</a>';
+}
+
+function company_info_html(): string
+{
+    $settings = app_settings();
+    $lines = [];
+    foreach (['company_name', 'company_address', 'company_tax_no'] as $key) {
+        $value = trim((string) ($settings[$key] ?? ''));
+        if ($value !== '') {
+            $lines[] = escape_html($value);
+        }
+    }
+    $contact = [];
+    $email = trim((string) ($settings['public_email'] ?? ''));
+    $phone = trim((string) ($settings['public_phone'] ?? ''));
+    if ($email !== '') {
+        $contact[] = '<a href="mailto:' . escape_html($email) . '">' . escape_html($email) . '</a>';
+    }
+    if ($phone !== '') {
+        $contact[] = escape_html($phone);
+    }
+    if ($contact !== []) {
+        $lines[] = implode(' · ', $contact);
+    }
+    return $lines === [] ? '' : implode('<br>', $lines);
 }

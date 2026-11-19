@@ -20,6 +20,10 @@ $assert = static function (bool $ok, string $label) use (&$failed): void {
 $assert(validate_turkish_iban('TR330006100519786457841326') === true, 'geçerli IBAN');
 $assert(validate_turkish_iban('TR000000000000000000000000') === false, 'geçersiz IBAN');
 $assert(international_phone('0532 111 22 33') === '+905321112233', 'telefon uluslararası');
+$assert(international_phone('+44 20 7946 0958') === '+442079460958', 'artı önekli yabancı numara');
+$assert(international_phone('0049 30 901820') === '+4930901820', '00 önekli yabancı numara');
+$assert(str_contains(whatsapp_link('0532 111 22 33', 'merhaba'), 'wa.me/905321112233'), 'WhatsApp bağlantısı');
+$assert(str_contains(whatsapp_link('+1 415 555 2671', 'merhaba'), 'wa.me/14155552671'), 'yabancı WhatsApp bağlantısı');
 
 $sample = 'ABC123DEF456ABC123DEF456';
 $enc = encrypt_activation_code($sample);
@@ -34,6 +38,9 @@ $body = '{"type":"order.created"}';
 $token = 'whsec';
 $sig = hash_hmac('sha256', $body, $token);
 $assert(shopier_verify_webhook($body, $sig, $token) === true, 'Shopier webhook HMAC');
+$assert(shopier_amount_candidates(['total_price' => '399.00']) === [39900], 'Shopier tutar (ondalık)');
+$assert(in_array(39900, shopier_amount_candidates(['price' => 399]), true), 'Shopier tutar (tam sayı TL)');
+$assert(shopier_amount_candidates(['buyer' => 'x']) === [], 'Shopier tutar alanı yok');
 
 $database = app_db();
 $assert($database instanceof PDO, 'veritabanı bağlantısı');

@@ -26,7 +26,7 @@ Panelden fiyatı, Shopier ürün URL'sini, banka adı/IBAN/hesap sahibini, ödem
 4. Banka hesabındaki parayı kendiniz doğruladıktan sonra panelden **Onayla + e-posta kodu** veya **Onayla + WhatsApp kodu** seçin. E-posta `mail()`/SMTP ile gönderilir. WhatsApp seçeneği, kodu mesajı hazır olarak içeren bir `wa.me` bağlantısı üretir; bağlantıyı açıp mesajı siz gönderirsiniz.
 5. Aktivasyon kodu onaydan sonra yalnızca yönetici panelinde gösterilir ve müşterinin `satin.php` sayfasında kullanılır.
 
-Müşteri bildirimi ödeme onayı değildir. Para hesabınızda görünmeden onay vermeyin. Gerçek e-posta teslimi için hosting sağlayıcısının SMTP/PHP mail ayarlarını yapıp test edin. Otomatik banka/Shopier ödeme doğrulaması ve SMS gateway entegrasyonu bu sürümde yoktur.
+Müşteri bildirimi ödeme onayı değildir. Para hesabınızda görünmeden onay vermeyin. Gerçek e-posta teslimi için hosting sağlayıcısının SMTP/PHP mail ayarlarını yapıp test edin. Havale akışı manuel onayla çalışır; SMS gateway (Netgsm) ve e-posta `mail()`/SMTP üzerinden gider.
 
 Onaylı havale kaydında **Kodu e-posta ile tekrar ver** veya **Kodu WhatsApp ile gönder** işlemi kullanılabilir. Kayıtlı kodun yeniden verilmesi aktivasyonu sıfırlar; müşterinin önceki cihaz oturumu kapanır. Yeni kodlar doğrulama hash'inin yanında `activation.key` ile AES-256-GCM kullanılarak şifreli saklanır. `activation.key` dosyasını `licenses.sqlite` ile aynı özel depoda yedekleyin; anahtar olmadan saklı kodlar çözülemez.
 
@@ -34,7 +34,9 @@ Bu özellik eklenmeden önce üretilen kodlarda yalnızca hash vardır; aynı ko
 
 ## Shopier
 
-Shopier'de ürünü oluşturup URL'sini yönetim panelindeki alana girin. Ürün fiyatının paneldeki fiyatla aynı olduğundan emin olun. Canlı Shopier ödemesi panelden manuel doğrulanır; SMS/e-posta kodu müşteri için etkinleştirmedir, otomatik ödeme callback'i değildir.
+Shopier'de ürünü oluşturup URL'sini yönetim panelindeki alana girin. Ürün fiyatının paneldeki fiyatla aynı olduğundan emin olun.
+
+Shopier webhook'u `shopier-callback.php` üzerinden çalışır. `shopier_webhook_token` ayarına Shopier'ın verdiği token'ı girin; gelen istek `Shopier-Signature` başlığıyla HMAC-SHA256 olarak doğrulanır. Doğrulanan siparişlerde tutar panel fiyatıyla eşleşmezse kod üretilmez; `order.cancelled`/`order.refunded` gibi iptal/iade olaylarında lisansın oturumu kapatılır ve kodu devre dışı bırakılır. Alternatif olarak `shopier_api_secret` ile form-callback imzası da doğrulanır. **İlk canlı test siparişinde payload alan adlarını (`id`, `status`, `email`, tutar alanı) gerçek yanıtla doğrulayın.**
 
 CLI ile manuel aktivasyon kodu üretme aracı da bulunur:
 
@@ -59,6 +61,10 @@ C:\xampp\php\php.exe -S 127.0.0.1:8001 -t .
 ```
 
 Varsayılan lisans veritabanı web kökünün dışında, `C:\xampp\arac-storage\licenses.sqlite` konumunda oluşturulur. `ARAC_STORAGE_DIR` ortam değişkeniyle başka bir özel dizin belirlenebilir.
+
+Yedek almak için (CLI): `C:\xampp\php\php.exe .\backup-storage.php`. Betik veritabanını `VACUUM INTO` ile tutarlı bir anlık görüntü olarak arşive koyar; `activation.key` ise zip'in dışında ayrı bir `.key` dosyasına yazılır (anahtar olmadan saklı kodlar çözülemez). Yedekleri sunucu dışına taşıyın; cron/Task Scheduler ile örn. günlük çalıştırın. `activation.key` ve `admin-password.hash` mutlaka yedeklenmelidir.
+
+Yasal sayfalar (`gizlilik.php`, `kvkk.php`, `cerez.php`, `mesafeli-satis.php`, `on-bilgilendirme.php`, `iade.php`) satıştan önce yönetim panelindeki şirket bilgileri (unvan, adres, vergi no, herkese açık e-posta/telefon) ile doldurulmalıdır. **Bu metinler örnektir; yayına almadan önce bir hukukçu tarafından incelenmelidir.**
 
 Canlı site dosyaları doğrudan `public_html` içindeyse özel depolama varsayılan olarak `public_html` klasörünün bir üstündeki `arac-storage` dizinidir. Terminal kullanmadan geçiş için yereldeki `C:\xampp\arac-storage` klasörünün tamamını hosting Dosya Yöneticisi ile bu özel konuma yükleyin. İçindeki `admin-password.hash`, `settings.json` ve veritabanı dosyaları aynı kalır. Bu klasörü `public_html` içine yüklemeyin; `setup-admin-password.php` komutunu canlıda çalıştırmanız gerekmez.
 

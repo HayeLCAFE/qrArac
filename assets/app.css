@@ -102,6 +102,9 @@ h1, h2, p { margin-top: 0; }
   font: 13px "Segoe UI", sans-serif;
 }
 .field textarea { min-height: 76px; resize: vertical; }
+.field input[type="checkbox"] { width: auto; min-height: 0; }
+.field.check-row, .field.check { display: flex; gap: 8px; align-items: center; }
+.field.check-row > span, .field.check > span { margin: 0; }
 .field input:focus, .field textarea:focus, .field select:focus {
   outline: 2px solid #245c4828;
   border-color: var(--green);

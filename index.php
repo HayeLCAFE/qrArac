@@ -84,7 +84,7 @@ layout_top('<a class="builder-link" href="satin.php">Satın al</a>');
         <a class="transfer-link" href="#nasil-calisir">Nasıl çalışır?</a>
       </div>
       <div class="hero-meta">
-        <span>Anında teslim</span>
+        <span>Onay sonrası teslim</span>
         <span>Güvenli ödeme</span>
         <span>Filo desteği</span>
       </div>
@@ -149,7 +149,7 @@ layout_top('<a class="builder-link" href="satin.php">Satın al</a>');
       </details>
       <details>
         <summary>Telefon numaram herkese açık olur mu?</summary>
-        <p class="a">Numaranız yalnızca kart sayfasında görünür. Kısa bağlantı (`kart.php?k=...`) ad, telefon veya plaka içermez; paylaşsanız bile kişisel veri sızmaz.</p>
+        <p class="a">Numaranız yalnızca kart sayfasında görünür. Kısa bağlantı (kart.php?k=...) ad, telefon veya plaka içermez; paylaşsanız bile kişisel veri sızmaz.</p>
       </details>
       <details>
         <summary>Aktivasyon kodu nasıl teslim edilir?</summary>
@@ -170,4 +170,5 @@ layout_top('<a class="builder-link" href="satin.php">Satın al</a>');
 </main>
 <?php
 layout_footer();
+echo '</div>';
 layout_end();

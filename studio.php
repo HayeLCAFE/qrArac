@@ -56,6 +56,8 @@ $extra = '
 .preview-status a{color:var(--green);font-weight:700}
 .print-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .nfc-status{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.nfc-guide{margin:8px 0 0;font-size:11px}
+.nfc-guide a{color:var(--green);font-weight:700;text-decoration:none}
 @media(max-width:900px){.studio-grid{grid-template-columns:1fr}.preview-column{position:static}}
 @media(max-width:560px){.studio-grid{padding:24px 0 40px}.page-intro h1{font-size:27px}.print-card{max-width:340px}.print-actions{grid-template-columns:1fr}}
 @media print{
@@ -100,6 +102,7 @@ layout_head('QR Araç Kartı Oluştur', $extra);
           <label class="field"><span>Alerjiler</span><textarea id="allergies-input" name="allergies" maxlength="300" placeholder="Örn. Penisilinde alerji"></textarea></label>
           <label class="field"><span>Kronik durumlar</span><textarea id="chronic-input" name="chronic_conditions" maxlength="400"></textarea></label>
           <label class="field"><span>Özel acil notlar</span><textarea id="special-notes-input" name="special_notes" maxlength="500"></textarea></label>
+          <label class="field check-row"><input type="checkbox" id="health-consent-input" name="health_consent" value="1"><span>Bu bilgilerin QR’ı okutan herkese görüneceğini kabul ediyorum.</span></label>
         </div>
 
         <div class="form-section">
@@ -156,6 +159,7 @@ layout_head('QR Araç Kartı Oluştur', $extra);
           <button class="button secondary" id="nfc-write-button" type="button" hidden>NFC’ye aktar</button>
         </div>
         <p class="nfc-status" id="nfc-status" hidden>NFC: Android Chrome, HTTPS ve fiziksel çip.</p>
+        <p class="nfc-guide"><a href="nfc-rehber.php">NFC etiketi nasıl programlanır?</a></p>
       </div>
     </aside>
   </main>
@@ -222,6 +226,7 @@ const loadCard = (card) => {
   document.querySelector("#locale-input").value = card.locale;
   document.querySelector("#template-input").value = card.template;
   document.querySelector("#whatsapp-input").checked = Number(card.whatsapp) === 1;
+  document.querySelector("#health-consent-input").checked = Boolean(card.emergency_phone || card.blood_type || card.allergies || card.chronic_conditions || card.special_notes);
   document.querySelector("#card-owner").textContent = card.owner_name;
   document.querySelectorAll("#card-list .card-item").forEach((item) => item.classList.toggle("active", item.dataset.id === activeCardId));
   applyTemplate();
@@ -239,7 +244,9 @@ const paintQr = (url) => {
   new QRCode(box, { text: url, width: 512, height: 512, colorDark: "#17241f", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.Q });
   document.querySelector("#qr-placeholder").hidden = true;
   document.querySelector("#print-button").disabled = false;
-  document.querySelector("#nfc-write-button").hidden = true;
+  const nfcSupported = "NDEFReader" in window;
+  document.querySelector("#nfc-write-button").hidden = !nfcSupported;
+  document.querySelector("#nfc-status").hidden = !nfcSupported;
   const status = document.querySelector("#preview-status");
   status.textContent = "";
   const link = document.createElement("a");
@@ -249,12 +256,12 @@ const paintQr = (url) => {
   link.textContent = url;
   status.appendChild(link);
 };
-const refresh = async () => {
+const refresh = async (loadFirst = true) => {
   const response = await fetch("kart-api.php", { credentials: "same-origin" });
   const data = await response.json();
   if (!data.ok) return;
   renderList(data.cards, data.max);
-  if (data.cards[0] && !document.querySelector("#card-id").value) loadCard(data.cards[0]);
+  if (loadFirst && data.cards[0] && !document.querySelector("#card-id").value) loadCard(data.cards[0]);
 };
 document.querySelector("#new-card").addEventListener("click", () => {
   form.reset();
@@ -268,9 +275,10 @@ document.querySelector("#new-card").addEventListener("click", () => {
   document.querySelector("#print-button").disabled = true;
   document.querySelector("#nfc-write-button").hidden = true;
   document.querySelector("#preview-status").textContent = "Kartı kaydederek kısa bağlantılı QR üretin.";
+  document.querySelector("#card-owner").textContent = "Araç sahibi";
   applyTemplate();
   syncSwatches();
-  refresh();
+  refresh(false);
 });
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -156,9 +156,12 @@ body{background:#f2f5f1}
 .meo-line a{color:var(--danger);font-weight:800;text-decoration:none}
 .acc-intro{margin:10px 0 6px;color:var(--muted);font-size:12px;line-height:1.55}
 .quick-list{display:grid;gap:8px;padding-bottom:14px}
-.quick-msg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;color:var(--ink);background:#fbfcfa;font-size:12.5px;font-weight:600;text-decoration:none;transition:border-color .15s ease,background .15s ease}
-.quick-msg:hover{border-color:var(--tpl-accent);background:var(--tpl-soft)}
-.quick-msg .arrow{color:var(--muted);font-weight:400}
+.quick-msg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;color:var(--ink);background:#fbfcfa;font-size:12.5px;font-weight:600}
+.quick-msg .quick-acts{display:flex;gap:8px;flex:0 0 auto}
+.quick-msg .quick-acts a{padding:5px 9px;border:1px solid var(--line);border-radius:8px;color:var(--green);background:#fff;font-size:11px;font-weight:700;text-decoration:none}
+.quick-msg .quick-acts a:hover{border-color:var(--tpl-accent);background:var(--tpl-soft)}
+a.quick-msg{text-decoration:none}
+a.quick-msg:hover{border-color:var(--tpl-accent);background:var(--tpl-soft)}
 .kart-scan{margin:18px 0 0;color:var(--muted);font-size:10px;letter-spacing:.14em;text-align:center;text-transform:uppercase}
 @media(max-width:420px){.page{width:calc(100% - 20px);padding:12px 0 24px}.actions{grid-template-columns:1fr}.action.wa,.action.sms{grid-column:auto}.phone-number{font-size:19px}.card-head{padding:16px 16px 14px}.card-body{padding:0 16px 16px}}
 CSS;
@@ -231,7 +234,13 @@ layout_top('<a class="builder-link" href="satin.php">' . escape_html($copy['buy'
       <p class="acc-intro"><?= escape_html($copy['quickSub']) ?></p>
       <div class="quick-list">
         <?php foreach ($quickMessages as $quickMessage): ?>
-          <a class="quick-msg" href="sms:<?= escape_html($intl) ?>?body=<?= escape_html(rawurlencode($quickMessage)) ?>"><span><?= escape_html($quickMessage) ?></span><span class="arrow">›</span></a>
+          <div class="quick-msg">
+            <span><?= escape_html($quickMessage) ?></span>
+            <span class="quick-acts">
+              <?php if ($intl !== ''): ?><a href="sms:<?= escape_html($intl) ?>?body=<?= escape_html(rawurlencode($quickMessage)) ?>">SMS</a><?php endif; ?>
+              <?php if ((int) $card['whatsapp'] === 1 && $wa !== ''): ?><a href="https://wa.me/<?= escape_html($wa) ?>?text=<?= escape_html(rawurlencode($quickMessage)) ?>" rel="noopener">WA</a><?php endif; ?>
+            </span>
+          </div>
         <?php endforeach; ?>
       </div>
     </div>
@@ -246,7 +255,7 @@ layout_top('<a class="builder-link" href="satin.php">' . escape_html($copy['buy'
     <div class="acc-body">
       <div class="quick-list">
         <?php if ($intl !== ''): ?><a class="quick-msg" href="sms:<?= escape_html($intl) ?>"><span><?= escape_html($copy['sms']) ?></span><span class="arrow">›</span></a><?php endif; ?>
-        <?php if ($wa !== ''): ?><a class="quick-msg" href="https://wa.me/<?= escape_html($wa) ?>" rel="noopener"><span>WhatsApp</span><span class="arrow">›</span></a><?php endif; ?>
+        <?php if ((int) $card['whatsapp'] === 1 && $wa !== ''): ?><a class="quick-msg" href="https://wa.me/<?= escape_html($wa) ?>" rel="noopener"><span>WhatsApp</span><span class="arrow">›</span></a><?php endif; ?>
       </div>
     </div>
   </details>
@@ -255,4 +264,5 @@ layout_top('<a class="builder-link" href="satin.php">' . escape_html($copy['buy'
 </main>
 <?php
 layout_footer();
+echo '</div>';
 layout_end();

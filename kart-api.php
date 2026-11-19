@@ -53,6 +53,8 @@ $bloodType = trim((string) ($_POST['blood_type'] ?? ''));
 $allergies = trim((string) ($_POST['allergies'] ?? ''));
 $chronicConditions = trim((string) ($_POST['chronic_conditions'] ?? ''));
 $specialNotes = trim((string) ($_POST['special_notes'] ?? ''));
+$hasHealthData = $emergencyPhone !== '' || $bloodType !== '' || $allergies !== '' || $chronicConditions !== '' || $specialNotes !== '';
+$healthConsent = ($_POST['health_consent'] ?? '') === '1';
 $digits = normalize_phone_digits($phone);
 $cardId = filter_var($_POST['card_id'] ?? null, FILTER_VALIDATE_INT);
 
@@ -69,6 +71,16 @@ if (strlen($digits) < 10 || strlen($digits) > 15) {
 if (mb_strlen($note) > 100 || mb_strlen($plate) > 16) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Not veya plaka çok uzun.']);
+    exit;
+}
+if (mb_strlen($emergencyPhone) > 20 || mb_strlen($bloodType) > 8 || mb_strlen($allergies) > 300 || mb_strlen($chronicConditions) > 400 || mb_strlen($specialNotes) > 500) {
+    http_response_code(422);
+    echo json_encode(['ok' => false, 'error' => 'Acil durum bilgileri izin verilen uzunluğu aşıyor.']);
+    exit;
+}
+if ($hasHealthData && !$healthConsent) {
+    http_response_code(422);
+    echo json_encode(['ok' => false, 'error' => 'Acil durum bilgilerinin QR’ı okutan herkese görüneceğini onaylamanız gerekir.']);
     exit;
 }
 
