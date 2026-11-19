@@ -16,7 +16,7 @@ C:\xampp\php\php.exe .\setup-admin-password.php
 
 En az 14 karakterli yönetici parolasını terminale yazın; parolayı sohbet veya e-posta ile paylaşmayın. Hash web kökü dışındaki özel depoda tutulur. Girişte 15 dakika içinde 8 denemeden sonra bloke uygulanır; yönetici oturumu 20 dakika hareketsizlikte kapanır.
 
-Panelden fiyatı, Shopier ürün URL'sini, banka adı/IBAN/hesap sahibini, ödeme açıklamasını ve yönetici e-posta adresini ayarlayın. IBAN kaydedilirken Türkiye IBAN kontrol basamağı doğrulanır. Ayar dosyası web kökünün dışındadır.
+Panelden fiyatı, Shopier ürün URL'si ve API/webhook bilgileri, banka adı/IBAN/hesap sahibini, ödeme açıklamasını, yönetici ve herkese açık iletişim bilgilerini, SMTP (e-posta) ve Netgsm (SMS) ayarlarını, site adresini (`public_base_url`), HTTPS zorlamasını ve lisans başına kart sınırını ayarlayın. Gizli alanlar (şifreler, API secret) boş bırakılırsa mevcut değeri korunur. IBAN kaydedilirken Türkiye IBAN kontrol basamağı doğrulanır. Ayar dosyası web kökünün dışındadır.
 
 ## Havale / EFT ve kod teslimi
 
@@ -44,7 +44,7 @@ CLI ile manuel aktivasyon kodu üretme aracı da bulunur:
 C:\xampp\php\php.exe .\issue-code.php SHOPIER_SIPARIS_NUMARASI
 ```
 
-`SHOPIER_SIPARIS_NUMARASI` yerine gerçek ve benzersiz sipariş referansını yazın. Kod tek kullanımlıktır ve etkinleştiği tarayıcı oturumuna bağlanır.
+`SHOPIER_SIPARIS_NUMARASI` yerine gerçek ve benzersiz sipariş referansını yazın. Lisans tek kullanımlıktır; etkinleştiği tarayıcı oturumuna bağlanır ve aynı kod başka cihazda tekrar girilebilir.
 
 ## Sunucu gereksinimleri
 

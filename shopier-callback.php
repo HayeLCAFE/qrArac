@@ -50,7 +50,7 @@ if ($token !== '' && $signatureHeader !== '' && shopier_verify_webhook($raw, $si
     $status = strtolower((string) ($_POST['status'] ?? $_POST['payment_status'] ?? 'success'));
     $type = strtolower((string) ($_POST['type'] ?? ''));
     $cancelEvent = in_array($type, $cancelTypes, true) || in_array($status, ['cancelled', 'canceled', 'refunded', 'refund'], true);
-    $statusOk = $cancelEvent || in_array($status, ['success', 'completed', 'paid', '1', ''], true);
+    $statusOk = $cancelEvent || in_array($status, ['success', 'completed', 'paid', '1'], true);
     $amountCandidates = shopier_amount_candidates($_POST);
 }
 
@@ -61,20 +61,18 @@ if (!$verified || !$statusOk || $orderRef === '' || strlen($orderRef) > 120) {
 }
 
 $expectedKurus = (int) app_settings()['price_kurus'];
-if (!$cancelEvent && $amountCandidates !== []) {
-    $matched = false;
-    foreach ($amountCandidates as $candidate) {
-        if (abs($candidate - $expectedKurus) <= 100) {
-            $matched = true;
-            break;
-        }
+$matched = false;
+foreach ($amountCandidates as $candidate) {
+    if (abs($candidate - $expectedKurus) <= 100) {
+        $matched = true;
+        break;
     }
-    if (!$matched) {
-        error_log('Shopier amount mismatch for ' . $orderRef);
-        http_response_code(400);
-        echo 'amount-mismatch';
-        exit;
-    }
+}
+if (!$cancelEvent && !$matched) {
+    error_log('Shopier amount mismatch for ' . $orderRef);
+    http_response_code(400);
+    echo 'amount-mismatch';
+    exit;
 }
 
 $phone = $phone !== '' && $phone !== null ? $phone : null;

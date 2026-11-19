@@ -44,7 +44,6 @@ $assert(shopier_amount_candidates(['buyer' => 'x']) === [], 'Shopier tutar alan�
 
 $database = app_db();
 $assert($database instanceof PDO, 'veritabanı bağlantısı');
-$database->exec('CREATE TABLE IF NOT EXISTS cards (id INTEGER PRIMARY KEY)');
 
 $assert(money_tl(39900) === '399,00 TL', 'para biçimi');
 

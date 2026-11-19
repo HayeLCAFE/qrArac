@@ -5,7 +5,12 @@ require_once __DIR__ . '/auth.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, private');
 
-$licenseId = require_paid_access();
+$licenseId = current_license_id();
+if ($licenseId === null) {
+    http_response_code(401);
+    echo json_encode(['ok' => false, 'error' => 'Oturum bulunamadı.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $database = app_db();
 $settings = app_settings();
 $maxCards = max(1, min(20, (int) $settings['max_cards_per_license']));
@@ -41,7 +46,7 @@ if ($action === 'delete') {
 $name = trim((string) ($_POST['name'] ?? ''));
 $phone = trim((string) ($_POST['phone'] ?? ''));
 $note = trim((string) ($_POST['note'] ?? ''));
-$plate = strtoupper(trim((string) ($_POST['plate'] ?? '')));
+$plate = mb_strtoupper(trim((string) ($_POST['plate'] ?? '')));
 $locale = ($_POST['locale'] ?? 'tr') === 'en' ? 'en' : 'tr';
 $template = (string) ($_POST['template'] ?? 'navy');
 if (!array_key_exists($template, card_templates())) {
@@ -55,6 +60,13 @@ $chronicConditions = trim((string) ($_POST['chronic_conditions'] ?? ''));
 $specialNotes = trim((string) ($_POST['special_notes'] ?? ''));
 $hasHealthData = $emergencyPhone !== '' || $bloodType !== '' || $allergies !== '' || $chronicConditions !== '' || $specialNotes !== '';
 $healthConsent = ($_POST['health_consent'] ?? '') === '1';
+$healthConsentAt = ($hasHealthData && $healthConsent) ? gmdate('Y-m-d H:i:s') : null;
+$emergencyDigits = normalize_phone_digits($emergencyPhone);
+if ($emergencyPhone !== '' && (strlen($emergencyDigits) < 10 || strlen($emergencyDigits) > 15)) {
+    http_response_code(422);
+    echo json_encode(['ok' => false, 'error' => 'Acil durum telefonunu kontrol edin.']);
+    exit;
+}
 $digits = normalize_phone_digits($phone);
 $cardId = filter_var($_POST['card_id'] ?? null, FILTER_VALIDATE_INT);
 
@@ -87,7 +99,7 @@ if ($hasHealthData && !$healthConsent) {
 if ($cardId) {
     $update = $database->prepare(
         'UPDATE cards SET owner_name=:name, phone=:phone, note=:note, plate=:plate, locale=:locale, template=:template, whatsapp=:wa,
-         emergency_phone=:emergency_phone, blood_type=:blood_type, allergies=:allergies, chronic_conditions=:chronic_conditions, special_notes=:special_notes, updated_at=CURRENT_TIMESTAMP
+         emergency_phone=:emergency_phone, blood_type=:blood_type, allergies=:allergies, chronic_conditions=:chronic_conditions, special_notes=:special_notes, health_consent_at=:hca, updated_at=CURRENT_TIMESTAMP
          WHERE id=:id AND license_id=:license'
     );
     $update->execute([
@@ -103,6 +115,7 @@ if ($cardId) {
         'allergies' => $allergies,
         'chronic_conditions' => $chronicConditions,
         'special_notes' => $specialNotes,
+        'hca' => $healthConsentAt,
         'id' => $cardId,
         'license' => $licenseId
     ]);
@@ -132,9 +145,9 @@ if ($cardId) {
     $token = bin2hex(random_bytes(12));
     $insert = $database->prepare(
         'INSERT INTO cards (public_token, license_id, owner_name, phone, note, plate, locale, template, whatsapp,
-         emergency_phone, blood_type, allergies, chronic_conditions, special_notes)
+         emergency_phone, blood_type, allergies, chronic_conditions, special_notes, health_consent_at)
          VALUES (:token, :license, :name, :phone, :note, :plate, :locale, :template, :wa,
-         :emergency_phone, :blood_type, :allergies, :chronic_conditions, :special_notes)'
+         :emergency_phone, :blood_type, :allergies, :chronic_conditions, :special_notes, :hca)'
     );
     $insert->execute([
         'token' => $token,
@@ -150,7 +163,8 @@ if ($cardId) {
         'blood_type' => $bloodType,
         'allergies' => $allergies,
         'chronic_conditions' => $chronicConditions,
-        'special_notes' => $specialNotes
+        'special_notes' => $specialNotes,
+        'hca' => $healthConsentAt
     ]);
     $cardId = (int) $database->lastInsertId();
     $database->exec('COMMIT');

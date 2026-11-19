@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'login' && !$adminAuthenticated) {
             $ipHash = request_ip_hash();
             $attemptCount = $database->prepare(
-                "SELECT COUNT(*) FROM admin_login_attempts WHERE ip_hash = :ip AND attempted_at >= datetime('now', '-15 minutes')"
+                "SELECT COUNT(*) FROM admin_login_attempts WHERE ip_hash = :ip AND succeeded = 0 AND attempted_at >= datetime('now', '-15 minutes')"
             );
             $attemptCount->execute(['ip' => $ipHash]);
 
@@ -123,6 +123,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $currentSettings = app_settings();
+                $shopierSecret = (string) ($_POST['shopier_api_secret'] ?? '');
+                $smtpPass = (string) ($_POST['smtp_pass'] ?? '');
+                $smsPassword = (string) ($_POST['sms_password'] ?? '');
+                $smtpPort = (int) ($_POST['smtp_port'] ?? 587);
+                if ($smtpPort < 1 || $smtpPort > 65535) {
+                    $smtpPort = 587;
+                }
                 $maxCards = filter_var($_POST['max_cards_per_license'] ?? 3, FILTER_VALIDATE_INT);
                 $baseUrl = trim((string) ($_POST['public_base_url'] ?? ''));
                 if ($baseUrl !== '' && !preg_match('#^https://#i', $baseUrl)) {
@@ -145,7 +152,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'company_tax_no' => trim((string) ($_POST['company_tax_no'] ?? '')),
                     'public_email' => $publicEmail,
                     'public_phone' => $publicPhone,
-                    'trusted_proxies' => trim((string) ($_POST['trusted_proxies'] ?? ''))
+                    'trusted_proxies' => trim((string) ($_POST['trusted_proxies'] ?? '')),
+                    'shopier_api_key' => trim((string) ($_POST['shopier_api_key'] ?? $currentSettings['shopier_api_key'])),
+                    'shopier_api_secret' => $shopierSecret === '' ? $currentSettings['shopier_api_secret'] : $shopierSecret,
+                    'shopier_webhook_token' => trim((string) ($_POST['shopier_webhook_token'] ?? $currentSettings['shopier_webhook_token'])),
+                    'smtp_host' => trim((string) ($_POST['smtp_host'] ?? $currentSettings['smtp_host'])),
+                    'smtp_port' => $smtpPort,
+                    'smtp_user' => trim((string) ($_POST['smtp_user'] ?? $currentSettings['smtp_user'])),
+                    'smtp_pass' => $smtpPass === '' ? $currentSettings['smtp_pass'] : $smtpPass,
+                    'smtp_encryption' => in_array($_POST['smtp_encryption'] ?? 'tls', ['tls', 'ssl', 'none'], true) ? $_POST['smtp_encryption'] : 'tls',
+                    'sms_provider' => trim((string) ($_POST['sms_provider'] ?? $currentSettings['sms_provider'])),
+                    'sms_usercode' => trim((string) ($_POST['sms_usercode'] ?? $currentSettings['sms_usercode'])),
+                    'sms_password' => $smsPassword === '' ? $currentSettings['sms_password'] : $smsPassword,
+                    'sms_header' => trim((string) ($_POST['sms_header'] ?? $currentSettings['sms_header']))
                 ];
                 if (strlen($posted['payment_note']) > 500) {
                     throw new InvalidArgumentException('Ödeme açıklaması 500 karakterden kısa olmalı.');
@@ -289,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $deliveryResult = app_send_email(
                                 (string) $payment['email'],
                                 'Araç iletişim kartı aktivasyon kodunuz',
-                                "Ödemeniz onaylandı. Kartınızı oluşturmak için satin.php sayfasına gidip bu kodu girin:\n\n{$code}\n\nBu kod tek kullanımlıktır."
+                                "Ödemeniz onaylandı. Kartınızı oluşturmak için satin.php sayfasına gidip bu kodu girin:\n\n{$code}\n\nBu lisans tek kullanımlıktır; istediğiniz cihazdan tekrar girebilirsiniz."
                             );
                         }
 
@@ -432,12 +451,13 @@ if ($adminAuthenticated) {
     .count { min-width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; color: #233414; background: var(--lime); font-size: 12px; font-weight: 800; }
     .field { display: block; margin: 0 0 14px; }
     .field > span { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; }
-    .field input, .field textarea { width: 100%; min-height: 42px; padding: 10px 11px; border: 1px solid #cdd5cb; border-radius: 3px; color: var(--ink); background: #fff; font: 13px "Segoe UI", sans-serif; }
+    .field input, .field textarea, .field select { width: 100%; min-height: 42px; padding: 10px 11px; border: 1px solid #cdd5cb; border-radius: 3px; color: var(--ink); background: #fff; font: 13px "Segoe UI", sans-serif; }
+    .subhead { margin: 20px 0 4px; font: 700 13px "Segoe UI", sans-serif; color: var(--ink); }
     .field input[type="checkbox"] { width: auto; min-height: 0; }
     .field.check { display: flex; gap: 8px; align-items: center; }
     .field.check > span { margin: 0; }
     .field textarea { min-height: 72px; resize: vertical; }
-    .field input:focus, .field textarea:focus { outline: 2px solid #245c4828; border-color: var(--green); }
+    .field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid #245c4828; border-color: var(--green); }
     .grid-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 15px; border: 1px solid var(--green); border-radius: 3px; color: #fff; background: var(--green); font: 700 12px "Segoe UI", sans-serif; cursor: pointer; }
     .button:hover { background: #194533; }
@@ -552,8 +572,57 @@ if ($adminAuthenticated) {
                   <label class="field"><span>Lisans başına kart sınırı</span><input name="max_cards_per_license" type="number" min="1" max="20" value="<?= (int) $settings['max_cards_per_license'] ?>"></label>
                   <label class="field check spaced"><input type="checkbox" name="force_https" value="1" <?= !empty($settings['force_https']) ? 'checked' : '' ?>><span>HTTP isteklerini HTTPS'e yönlendir</span></label>
                 </div>
-                <p class="muted">E-posta teslimi için sunucuda SMTP/mail() yapılandırması gerekir. Ayarlar ve IBAN web kökü dışındaki özel depoda tutulur.</p>
+
+                <h3 class="subhead">Shopier API / webhook</h3>
+                <label class="field"><span>Shopier API anahtarı</span><input name="shopier_api_key" maxlength="200" value="<?= escape_html((string) $settings['shopier_api_key']) ?>" autocomplete="off"></label>
+                <label class="field"><span>Shopier API secret (boş = değişmez)</span><input name="shopier_api_secret" type="password" maxlength="200" autocomplete="new-password" placeholder="<?= trim((string) $settings['shopier_api_secret']) !== '' ? 'Kayıtlı — değiştirmek için yazın' : 'Secret girin' ?>"></label>
+                <label class="field"><span>Shopier webhook token</span><input name="shopier_webhook_token" maxlength="200" value="<?= escape_html((string) $settings['shopier_webhook_token']) ?>" autocomplete="off"></label>
+
+                <h3 class="subhead">E-posta (SMTP)</h3>
+                <div class="grid-fields">
+                  <label class="field"><span>SMTP sunucu</span><input name="smtp_host" maxlength="200" value="<?= escape_html((string) $settings['smtp_host']) ?>" placeholder="smtp.ornek.com" autocomplete="off"></label>
+                  <label class="field"><span>Port</span><input name="smtp_port" type="number" min="1" max="65535" value="<?= (int) $settings['smtp_port'] ?>"></label>
+                </div>
+                <div class="grid-fields">
+                  <label class="field"><span>SMTP kullanıcı</span><input name="smtp_user" maxlength="200" value="<?= escape_html((string) $settings['smtp_user']) ?>" autocomplete="off"></label>
+                  <label class="field"><span>SMTP şifre (boş = değişmez)</span><input name="smtp_pass" type="password" maxlength="200" autocomplete="new-password" placeholder="<?= trim((string) $settings['smtp_pass']) !== '' ? 'Kayıtlı — değiştirmek için yazın' : 'Şifre girin' ?>"></label>
+                </div>
+                <label class="field"><span>Şifreleme</span>
+                  <select name="smtp_encryption">
+                    <?php foreach (['tls' => 'TLS (587)', 'ssl' => 'SSL (465)', 'none' => 'Yok'] as $encValue => $encLabel): ?>
+                      <option value="<?= escape_html($encValue) ?>" <?= ($settings['smtp_encryption'] ?? 'tls') === $encValue ? 'selected' : '' ?>><?= escape_html($encLabel) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+
+                <h3 class="subhead">SMS (Netgsm)</h3>
+                <div class="grid-fields">
+                  <label class="field"><span>Sağlayıcı</span><input name="sms_provider" maxlength="50" value="<?= escape_html((string) $settings['sms_provider']) ?>" placeholder="netgsm"></label>
+                  <label class="field"><span>Gönderici başlığı</span><input name="sms_header" maxlength="50" value="<?= escape_html((string) $settings['sms_header']) ?>"></label>
+                </div>
+                <div class="grid-fields">
+                  <label class="field"><span>Netgsm kullanıcı kodu</span><input name="sms_usercode" maxlength="100" value="<?= escape_html((string) $settings['sms_usercode']) ?>" autocomplete="off"></label>
+                  <label class="field"><span>Netgsm şifre (boş = değişmez)</span><input name="sms_password" type="password" maxlength="200" autocomplete="new-password" placeholder="<?= trim((string) $settings['sms_password']) !== '' ? 'Kayıtlı — değiştirmek için yazın' : 'Şifre girin' ?>"></label>
+                </div>
+                <p class="muted">E-posta teslimi için SMTP veya sunucu mail() yapılandırması gerekir. Ayarlar ve IBAN web kökü dışındaki özel depoda tutulur.</p>
                 <button class="button full-button" type="submit">Ayarları kaydet</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading"><h2>Bağlantı testleri</h2></div>
+              <p class="muted">Satışa çıkmadan önce SMTP ve SMS ayarlarını gerçek alıcıyla deneyin.</p>
+              <form method="post" action="yonetim.php">
+                <input type="hidden" name="csrf_token" value="<?= escape_html(csrf_token()) ?>">
+                <input type="hidden" name="action" value="test_email">
+                <label class="field"><span>Test e-postası (boş = yönetici adresi)</span><input name="test_email" type="email" maxlength="254"></label>
+                <button class="button full-button" type="submit">E-posta testi gönder</button>
+              </form>
+              <form method="post" action="yonetim.php">
+                <input type="hidden" name="csrf_token" value="<?= escape_html(csrf_token()) ?>">
+                <input type="hidden" name="action" value="test_sms">
+                <label class="field spaced"><span>Test telefonu</span><input name="test_phone" type="tel" maxlength="20" required></label>
+                <button class="button secondary full-button" type="submit">SMS testi gönder</button>
               </form>
             </section>
 

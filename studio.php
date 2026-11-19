@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/layout.php';
 header('X-Robots-Tag: noindex, nofollow');
 require_paid_access();
 $templates = card_templates();
+$baseUrlConfigured = trim((string) app_settings()['public_base_url']) !== '';
 $extra = '
 .studio-grid{width:100%;max-width:1080px;margin:auto;padding:40px 0 56px;display:grid;grid-template-columns:minmax(340px,460px) minmax(0,1fr);gap:clamp(28px,5vw,56px);align-items:start}
 .page-intro{margin-bottom:20px}
@@ -128,6 +129,7 @@ layout_head('QR Araç Kartı Oluştur', $extra);
           <p class="editor-note">Baskıdan önce HTTPS adresinde QR’ı tarayın.</p>
           <button class="primary-button" type="submit">Kaydet ve QR oluştur</button>
           <button class="button secondary full-button" id="new-card" type="button">Yeni araç kartı</button>
+          <button class="button secondary full-button" id="delete-card" type="button" disabled>Kartı sil</button>
         </div>
       </form>
     </div>
@@ -168,6 +170,7 @@ layout_head('QR Araç Kartı Oluştur', $extra);
 <script src="assets/qrcode.min.js"></script>
 <script nonce="<?= app_csp_nonce() ?>">
 const templates = <?= json_encode($templates, JSON_UNESCAPED_UNICODE) ?>;
+const baseUrlConfigured = <?= $baseUrlConfigured ? 'true' : 'false' ?>;
 const form = document.querySelector("#card-form");
 const csrf = form.querySelector("[name=csrf_token]").value;
 let generatedUrl = "";
@@ -229,6 +232,7 @@ const loadCard = (card) => {
   document.querySelector("#health-consent-input").checked = Boolean(card.emergency_phone || card.blood_type || card.allergies || card.chronic_conditions || card.special_notes);
   document.querySelector("#card-owner").textContent = card.owner_name;
   document.querySelectorAll("#card-list .card-item").forEach((item) => item.classList.toggle("active", item.dataset.id === activeCardId));
+  document.querySelector("#delete-card").disabled = false;
   applyTemplate();
   syncSwatches();
   if (card.url) paintQr(card.url);
@@ -243,7 +247,7 @@ const paintQr = (url) => {
   }
   new QRCode(box, { text: url, width: 512, height: 512, colorDark: "#17241f", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.Q });
   document.querySelector("#qr-placeholder").hidden = true;
-  document.querySelector("#print-button").disabled = false;
+  document.querySelector("#print-button").disabled = !baseUrlConfigured;
   const nfcSupported = "NDEFReader" in window;
   document.querySelector("#nfc-write-button").hidden = !nfcSupported;
   document.querySelector("#nfc-status").hidden = !nfcSupported;
@@ -255,15 +259,31 @@ const paintQr = (url) => {
   link.rel = "noopener";
   link.textContent = url;
   status.appendChild(link);
+  if (!baseUrlConfigured) {
+    const warn = document.createElement("span");
+    warn.textContent = " Site adresi (public_base_url) ayarlanmadığı için yazdırma kapalı; yöneticinizle iletişime geçin.";
+    status.appendChild(warn);
+  }
+};
+const apiFetch = async (options = {}) => {
+  try {
+    const response = await fetch("kart-api.php", { credentials: "same-origin", ...options });
+    if (response.status === 401) {
+      window.location.href = "satin.php?access=required";
+      return null;
+    }
+    return await response.json();
+  } catch {
+    return null;
+  }
 };
 const refresh = async (loadFirst = true) => {
-  const response = await fetch("kart-api.php", { credentials: "same-origin" });
-  const data = await response.json();
-  if (!data.ok) return;
+  const data = await apiFetch();
+  if (!data || !data.ok) return;
   renderList(data.cards, data.max);
   if (loadFirst && data.cards[0] && !document.querySelector("#card-id").value) loadCard(data.cards[0]);
 };
-document.querySelector("#new-card").addEventListener("click", () => {
+const resetEditor = () => {
   form.reset();
   document.querySelector("#card-id").value = "";
   activeCardId = "";
@@ -276,22 +296,42 @@ document.querySelector("#new-card").addEventListener("click", () => {
   document.querySelector("#nfc-write-button").hidden = true;
   document.querySelector("#preview-status").textContent = "Kartı kaydederek kısa bağlantılı QR üretin.";
   document.querySelector("#card-owner").textContent = "Araç sahibi";
+  document.querySelector("#delete-card").disabled = true;
   applyTemplate();
   syncSwatches();
+};
+document.querySelector("#new-card").addEventListener("click", () => {
+  resetEditor();
   refresh(false);
+});
+document.querySelector("#delete-card").addEventListener("click", async () => {
+  if (!activeCardId || !window.confirm("Bu kartı silmek istediğinize emin misiniz?")) return;
+  const body = new FormData();
+  body.set("csrf_token", csrf);
+  body.set("action", "delete");
+  body.set("card_id", activeCardId);
+  const data = await apiFetch({ method: "POST", body });
+  if (!data) return;
+  if (!data.ok) {
+    document.querySelector("#preview-status").textContent = "Kart silinemedi.";
+    return;
+  }
+  resetEditor();
+  refresh();
 });
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const body = new FormData(form);
   if (!document.querySelector("#whatsapp-input").checked) body.set("whatsapp", "0");
-  const response = await fetch("kart-api.php", { method: "POST", body, credentials: "same-origin" });
-  const data = await response.json();
+  const data = await apiFetch({ method: "POST", body });
+  if (!data) return;
   if (!data.ok) {
     document.querySelector("#preview-status").textContent = data.error || "Kayıt başarısız.";
     return;
   }
   document.querySelector("#card-id").value = data.id;
   activeCardId = String(data.id);
+  document.querySelector("#delete-card").disabled = false;
   paintQr(data.url);
   refresh();
 });

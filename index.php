@@ -153,7 +153,7 @@ layout_top('<a class="builder-link" href="satin.php">Satın al</a>');
       </details>
       <details>
         <summary>Aktivasyon kodu nasıl teslim edilir?</summary>
-        <p class="a">Ödemeniz onaylandıktan sonra kodunuz e-posta ve/veya WhatsApp ile size iletilir. Kod tek kullanımlıktır ve yalnızca sizin oturumunuza bağlanır.</p>
+        <p class="a">Ödemeniz onaylandıktan sonra kodunuz e-posta ve/veya WhatsApp ile size iletilir. Lisansınız tek kullanımlıktır; dilediğiniz cihazdan tekrar girebilirsiniz.</p>
       </details>
       <details>
         <summary>Ödeme seçenekleri nelerdir?</summary>

@@ -237,7 +237,7 @@ layout_top('<a class="builder-link" href="satin.php">' . escape_html($copy['buy'
           <div class="quick-msg">
             <span><?= escape_html($quickMessage) ?></span>
             <span class="quick-acts">
-              <?php if ($intl !== ''): ?><a href="sms:<?= escape_html($intl) ?>?body=<?= escape_html(rawurlencode($quickMessage)) ?>">SMS</a><?php endif; ?>
+              <?php if ($intl !== ''): ?><a href="sms:<?= escape_html($intl) ?>?&body=<?= escape_html(rawurlencode($quickMessage)) ?>">SMS</a><?php endif; ?>
               <?php if ((int) $card['whatsapp'] === 1 && $wa !== ''): ?><a href="https://wa.me/<?= escape_html($wa) ?>?text=<?= escape_html(rawurlencode($quickMessage)) ?>" rel="noopener">WA</a><?php endif; ?>
             </span>
           </div>

@@ -174,7 +174,8 @@ function app_db(): PDO
         'blood_type' => 'ALTER TABLE cards ADD COLUMN blood_type TEXT NOT NULL DEFAULT ""',
         'allergies' => 'ALTER TABLE cards ADD COLUMN allergies TEXT NOT NULL DEFAULT ""',
         'chronic_conditions' => 'ALTER TABLE cards ADD COLUMN chronic_conditions TEXT NOT NULL DEFAULT ""',
-        'special_notes' => 'ALTER TABLE cards ADD COLUMN special_notes TEXT NOT NULL DEFAULT ""'
+        'special_notes' => 'ALTER TABLE cards ADD COLUMN special_notes TEXT NOT NULL DEFAULT ""',
+        'health_consent_at' => 'ALTER TABLE cards ADD COLUMN health_consent_at TEXT'
     ];
     foreach ($cardMigrations as $column => $sql) {
         if (!in_array($column, $cardColumns, true)) {
@@ -702,9 +703,15 @@ function deliver_activation_code(string $code, ?string $email, ?string $phone, s
     $body = $context . "\n\nAktivasyon kodunuz:\n{$code}\n\nKodu satin.php sayfasında kullanın. Kod, girdiğiniz tarayıcıya bağlanır; başka cihazda tekrar girebilirsiniz.";
     if (is_string($email) && $email !== '') {
         $emailSent = app_send_email($email, 'Araç iletişim kartı aktivasyon kodunuz', $body);
+        if (!$emailSent) {
+            error_log('Activation code email delivery failed.');
+        }
     }
     if (is_string($phone) && $phone !== '') {
         $smsSent = app_send_sms($phone, 'Aktivasyon kodunuz: ' . $code);
+        if (!$smsSent) {
+            error_log('Activation code SMS delivery failed.');
+        }
     }
     $waLink = '';
     if (is_string($phone) && $phone !== '') {
@@ -805,10 +812,10 @@ function recover_activation_code(PDO $database, string $orderReference): ?array
         throw new LogicException('Activation recovery must run inside a database transaction.');
     }
 
-    $query = $database->prepare('SELECT id, code_ciphertext FROM activation_codes WHERE order_ref = :order_ref');
+    $query = $database->prepare('SELECT id, code_hash, code_ciphertext FROM activation_codes WHERE order_ref = :order_ref');
     $query->execute(['order_ref' => $orderReference]);
     $license = $query->fetch();
-    if (!$license) {
+    if (!$license || str_starts_with((string) $license['code_hash'], 'revoked:')) {
         return null;
     }
 
